@@ -1,90 +1,17 @@
-name: Build, Push and Deploy to EC2
+name: Test Secrets
 
 on:
-  push:
-    branches:
-      - main
-
-env:
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-  IMAGE_TAG: latest
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build Docker Image
+      - name: Check Region
         run: |
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
-
-      - name: Tag Docker Image
-        run: |
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG \
-          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
-
-      - name: Push Docker Image
-        run: |
-          docker push \
-          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
-
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-
-            echo "Logging into Amazon ECR..."
-
-            aws ecr get-login-password --region $AWS_REGION | \
-            docker login \
-            --username AWS \
-            --password-stdin \
-            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-
-            echo "Pulling latest image..."
-
-            docker pull \
-            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
-
-            echo "Stopping old container..."
-
-            docker stop mrmrs-container || true
-
-            echo "Removing old container..."
-
-            docker rm mrmrs-container || true
-
-            echo "Starting new container..."
-
-            docker run -d \
-              --name mrmrs-container \
-              -p 80:80 \
-              --restart unless-stopped \
-              $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
-
-            echo "Cleaning unused Docker images..."
-
-            docker image prune -f
-
-            echo "Deployment Completed Successfully."
+          if [ -z "${{ secrets.AWS_REGION }}" ]; then
+            echo "AWS_REGION is EMPTY"
+          else
+            echo "AWS_REGION exists"
+          fi
